@@ -6,13 +6,21 @@ const addProduto = async (req, res) => {
   console.log("Entrou na função addProduto()", req.body);
     const {
       nome,
-      preco
+      marca,
+      preco,
+      estoque,
+      categoria,
+      ativo,
     } = req.body;
   try {
     // 1. Criar o produto
     const novoProduto = new Produto({
       nome,
-      preco
+      marca,
+      preco,
+      estoque,
+      categoria,
+      ativo,
     });
     
     await novoProduto.save();
@@ -35,13 +43,13 @@ const listProdutos = async (req, res) => {
     console.log(err)
   }
 }
+
 const listProdutosDetalhado = async (req, res) => {
     try {
     const produto = await Produto.find()
-    
-    res.status(200).json({ success: true, produto });
-    const resumo = produto.map((e) => Array.of("Produto: " + e.nome + " Valor: " + e.precoVenda + " Estoque: " + e.estoqueAtual))
+    const resumo = produto.map((e) => Array.of("Resumo: " + e.nome + " - " + e.precoVenda + " - " + e.estoqueAtual))
     console.log(resumo)
+    res.status(200).json({ success: true, resumo });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Erro ao buscar produto', error: err });
     console.log(err)
@@ -49,10 +57,9 @@ const listProdutosDetalhado = async (req, res) => {
 }
 const listProdutosPorCategoria = async (req, res) => {
   console.log("Acessou a função listProdutosPorCategoria()")
-  console.log(req.params.categoria)
   const recebeCategoria = req.params.categoria;
     try {
-    const categoria = await Produto.find({categoria: recebeCategoria})
+    const categoria = await Produto.find({categoria: recebeCategoria}).select('categoria')
     res.status(200).json({ success: true, categoria })
     console.log(categoria)
   } catch (err) {
@@ -75,4 +82,28 @@ const getCodigoProduto = async (req, res) => {
     res.status(500).json({ success: false, error: 'Erro ao buscar produto', detalhes: error.message });
   }
 };
-export { addProduto, listProdutos, getCodigoProduto, listProdutosPorCategoria, listProdutosDetalhado }
+
+const verificaSeTemEstoqueSuficienteParaVender = async (req, res) => {
+  const dados = req.body;
+  const ids = dados.produtos.map((item) => item._id);
+  const produtos = await Produto.find({_id: { $in: ids }});
+  const estoqueSuficiente = dados.produtos.every((itemPedido) => {
+    const produtoBanco = produtos.find((produto) => produto._id.toString() === itemPedido._id);
+    if (!produtoBanco) {
+      return false;
+    }
+    return itemPedido.estoqueAtual <= produtoBanco.estoqueAtual;
+  });
+  if (estoqueSuficiente) {
+    return res.status(200).json({
+      success: true,
+      message: "Estoque suficiente para venda"
+    });
+  }
+  return res.status(400).json({
+    success: false,
+    message: "Estoque insuficiente para venda"
+  });
+}
+
+export { addProduto, listProdutos, getCodigoProduto, listProdutosPorCategoria, listProdutosDetalhado, verificaSeTemEstoqueSuficienteParaVender }
